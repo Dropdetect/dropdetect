@@ -1,8 +1,6 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Search, Twitter, Coffee, Copy, Check, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -847,6 +845,20 @@ export default function DropDetectDashboard() {
   const [visibleUpcoming, setVisibleUpcoming] = useState(16)
   const [visibleClaimed, setVisibleClaimed] = useState(16)
   const [visibleExpired, setVisibleExpired] = useState(16)
+  const [dropsData, setDropsData] = useState<{
+    unclaimed: any[]
+    claimed: any[]
+    expired: any[]
+    upcoming: any[]
+  }>({
+    unclaimed: [],
+    claimed: [],
+    expired: [],
+    upcoming: []
+  })
+  const [newsData, setNewsData] = useState<any[]>([])
+  const [feedData, setFeedData] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   const handleSearch = (e?: React.KeyboardEvent) => {
     if (e && e.key !== "Enter") return
@@ -873,20 +885,56 @@ export default function DropDetectDashboard() {
   }
 
   const handleViewMoreUnclaimed = () => {
-    setVisibleUnclaimed(prev => Math.min(prev + 16, sampleDrops.unclaimed.length))
+    setVisibleUnclaimed(prev => Math.min(prev + 16, dropsData.unclaimed.length))
   }
 
   const handleViewMoreUpcoming = () => {
-    setVisibleUpcoming(prev => Math.min(prev + 16, sampleDrops.upcoming.length))
+    setVisibleUpcoming(prev => Math.min(prev + 16, dropsData.upcoming.length))
   }
 
   const handleViewMoreClaimed = () => {
-    setVisibleClaimed(prev => Math.min(prev + 16, sampleDrops.claimed.length))
+    setVisibleClaimed(prev => Math.min(prev + 16, dropsData.claimed.length))
   }
 
   const handleViewMoreExpired = () => {
-    setVisibleExpired(prev => Math.min(prev + 16, sampleDrops.expired.length))
+    setVisibleExpired(prev => Math.min(prev + 16, dropsData.expired.length))
   }
+
+  // Fetch data from API
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      
+      // Fetch drops data
+      const dropsResponse = await fetch('/api/drops')
+      const drops = await dropsResponse.json()
+      setDropsData(drops)
+      
+      // Fetch news data
+      const newsResponse = await fetch('/api/news')
+      const news = await newsResponse.json()
+      setNewsData(news)
+      
+      // Fetch live feed data
+      const feedResponse = await fetch('/api/live-feed')
+      const feed = await feedResponse.json()
+      setFeedData(feed)
+      
+    } catch (error) {
+      console.error('Error fetching data:', error)
+      // Fallback to sample data if API fails
+      setDropsData(sampleDrops)
+      setNewsData(newsItems)
+      setFeedData(sampleFeedEvents)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchData()
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">
@@ -1074,74 +1122,106 @@ export default function DropDetectDashboard() {
               </TabsList>
 
               <TabsContent value="unclaimed">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {sampleDrops.unclaimed.slice(0, visibleUnclaimed).map((drop) => (
-                    <DropCard key={drop.id} drop={drop} />
-                  ))}
-                </div>
-                {visibleUnclaimed < sampleDrops.unclaimed.length && (
-                  <div className="flex justify-center mt-8">
-                    <Button
-                      onClick={handleViewMoreUnclaimed}
-                      className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg"
-                    >
-                      View More ({sampleDrops.unclaimed.length - visibleUnclaimed} remaining)
-                    </Button>
+                {loading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
                   </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {dropsData.unclaimed.slice(0, visibleUnclaimed).map((drop) => (
+                        <DropCard key={drop.id} drop={drop} />
+                      ))}
+                    </div>
+                    {visibleUnclaimed < dropsData.unclaimed.length && (
+                      <div className="flex justify-center mt-8">
+                        <Button
+                          onClick={handleViewMoreUnclaimed}
+                          className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg"
+                        >
+                          View More ({dropsData.unclaimed.length - visibleUnclaimed} remaining)
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
               <TabsContent value="upcoming">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {sampleDrops.upcoming.slice(0, visibleUpcoming).map((drop) => (
-                    <DropCard key={drop.id} drop={drop} />
-                  ))}
-                </div>
-                {visibleUpcoming < sampleDrops.upcoming.length && (
-                  <div className="flex justify-center mt-8">
-                    <Button
-                      onClick={handleViewMoreUpcoming}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg"
-                    >
-                      View More ({sampleDrops.upcoming.length - visibleUpcoming} remaining)
-                    </Button>
+                {loading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
                   </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {dropsData.upcoming.slice(0, visibleUpcoming).map((drop) => (
+                        <DropCard key={drop.id} drop={drop} />
+                      ))}
+                    </div>
+                    {visibleUpcoming < dropsData.upcoming.length && (
+                      <div className="flex justify-center mt-8">
+                        <Button
+                          onClick={handleViewMoreUpcoming}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg"
+                        >
+                          View More ({dropsData.upcoming.length - visibleUpcoming} remaining)
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
               <TabsContent value="claimed">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {sampleDrops.claimed.slice(0, visibleClaimed).map((drop) => (
-                    <DropCard key={drop.id} drop={drop} />
-                  ))}
-                </div>
-                {visibleClaimed < sampleDrops.claimed.length && (
-                  <div className="flex justify-center mt-8">
-                    <Button
-                      onClick={handleViewMoreClaimed}
-                      className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg"
-                    >
-                      View More ({sampleDrops.claimed.length - visibleClaimed} remaining)
-                    </Button>
+                {loading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
                   </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {dropsData.claimed.slice(0, visibleClaimed).map((drop) => (
+                        <DropCard key={drop.id} drop={drop} />
+                      ))}
+                    </div>
+                    {visibleClaimed < dropsData.claimed.length && (
+                      <div className="flex justify-center mt-8">
+                        <Button
+                          onClick={handleViewMoreClaimed}
+                          className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg"
+                        >
+                          View More ({dropsData.claimed.length - visibleClaimed} remaining)
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
               <TabsContent value="expired">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {sampleDrops.expired.slice(0, visibleExpired).map((drop) => (
-                    <DropCard key={drop.id} drop={drop} />
-                  ))}
-                </div>
-                {visibleExpired < sampleDrops.expired.length && (
-                  <div className="flex justify-center mt-8">
-                    <Button
-                      onClick={handleViewMoreExpired}
-                      className="bg-slate-600 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg"
-                    >
-                      View More ({sampleDrops.expired.length - visibleExpired} remaining)
-                    </Button>
+                {loading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600"></div>
                   </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {dropsData.expired.slice(0, visibleExpired).map((drop) => (
+                        <DropCard key={drop.id} drop={drop} />
+                      ))}
+                    </div>
+                    {visibleExpired < dropsData.expired.length && (
+                      <div className="flex justify-center mt-8">
+                        <Button
+                          onClick={handleViewMoreExpired}
+                          className="bg-slate-600 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg"
+                        >
+                          View More ({dropsData.expired.length - visibleExpired} remaining)
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
             </Tabs>
@@ -1156,32 +1236,38 @@ export default function DropDetectDashboard() {
               <p className="text-muted-foreground">Stay updated with the latest airdrop announcements and opportunities</p>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {newsItems.map((item) => (
-                  <Card
-                    key={item.id}
-                    className="hover:shadow-lg transition-all duration-200 cursor-pointer border-l-4 border-l-green-500 hover:border-l-green-600 hover:scale-[1.02]"
-                  >
-                    <CardContent className="p-6 h-full flex flex-col">
-                      <div className="flex-1">
-                        <h3 className="font-bold text-lg mb-3 text-balance hover:text-green-600 transition-colors line-clamp-2">
-                          {item.title}
-                        </h3>
-                        <p className="text-muted-foreground text-sm leading-relaxed line-clamp-3 mb-4">{item.snippet}</p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full hover:bg-green-50 dark:hover:bg-green-950 bg-transparent border-green-200 hover:border-green-300"
-                        onClick={() => window.open(item.link, "_blank")}
-                      >
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Read More
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              {loading ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {newsData.map((item) => (
+                    <Card
+                      key={item.id}
+                      className="hover:shadow-lg transition-all duration-200 cursor-pointer border-l-4 border-l-green-500 hover:border-l-green-600 hover:scale-[1.02]"
+                    >
+                      <CardContent className="p-6 h-full flex flex-col">
+                        <div className="flex-1">
+                          <h3 className="font-bold text-lg mb-3 text-balance hover:text-green-600 transition-colors line-clamp-2">
+                            {item.title}
+                          </h3>
+                          <p className="text-muted-foreground text-sm leading-relaxed line-clamp-3 mb-4">{item.content}</p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full hover:bg-green-50 dark:hover:bg-green-950 bg-transparent border-green-200 hover:border-green-300"
+                          onClick={() => item.url && window.open(item.url, "_blank")}
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Read More
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

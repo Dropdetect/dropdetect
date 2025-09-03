@@ -23,29 +23,95 @@ enum UserRole {
 }
 
 model Drop {
-  id          String     @id @default(uuid())
-  name        String
-  symbol      String
-  logoUrl     String
-  status      DropStatus @default(UPCOMING)
-  claimUrl    String
-  estValueUSD Decimal    @default(0)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  source      Source?    @relation(fields: [sourceId], references: [id])
-  sourceId    String?
+  id              String     @id @default(uuid())
+  name            String
+  symbol          String
+  logoUrl         String
+  status          DropStatus @default(UPCOMING)
+  claimUrl        String?
+  estValueUSD     Decimal    @default(0)
+  description     String?
+  network         String?    // e.g., "Ethereum", "Solana", "Polygon"
+  tokenAddress    String?    // Contract address if available
+  totalSupply     Decimal?   // Total token supply
+  airdropSupply   Decimal?   // Amount allocated for airdrop
+  snapshotDate    DateTime?  // When eligibility was determined
+  claimStartDate  DateTime?  // When claiming begins
+  claimEndDate    DateTime?  // When claiming ends
+  eligibilityCriteria String? // Description of eligibility requirements
+  officialWebsite String?
+  twitterHandle   String?
+  discordUrl      String?
+  telegramUrl     String?
+  isVerified      Boolean    @default(false)
+  riskLevel       RiskLevel  @default(MEDIUM)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  source          Source?    @relation(fields: [sourceId], references: [id])
+  sourceId        String?
   eligibilityCache EligibilityCache[]
-  eligibility Eligibility[]
+  eligibility     Eligibility[]
+  news            News[]
+  tags            DropTag[]
 
-  @@unique([claimUrl])
+  @@unique([name, symbol])
   @@index([status])
+  @@index([network])
+  @@index([isVerified])
+  @@index([claimStartDate])
+  @@index([claimEndDate])
 }
 
 enum DropStatus {
-  UNCLAIMED
+  UPCOMING
+  ACTIVE
   CLAIMED
   EXPIRED
-  UPCOMING
+  CANCELLED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  UNKNOWN
+}
+
+model News {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  url         String?
+  source      String?  // e.g., "Official", "Twitter", "Medium"
+  publishedAt DateTime
+  isBreaking  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  drop        Drop?    @relation(fields: [dropId], references: [id])
+  dropId      String?
+
+  @@index([publishedAt])
+  @@index([isBreaking])
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  color     String?  // Hex color for UI
+  createdAt DateTime @default(now())
+  drops     DropTag[]
+
+  @@index([name])
+}
+
+model DropTag {
+  id     String @id @default(uuid())
+  drop   Drop   @relation(fields: [dropId], references: [id])
+  dropId String
+  tag    Tag    @relation(fields: [tagId], references: [id])
+  tagId  String
+
+  @@unique([dropId, tagId])
 }
 
 model FeedEvent {
@@ -53,32 +119,56 @@ model FeedEvent {
   address   String
   message   String
   valueUSD  Decimal  @default(0)
+  dropName  String?  // Name of the airdrop for context
   createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([address])
 }
 
 model Banner {
   id        String   @id @default(uuid())
   imageUrl  String
   linkUrl   String?
+  title     String?
+  description String?
   active    Boolean  @default(true)
+  priority  Int      @default(0) // Higher number = higher priority
+  startDate DateTime?
+  endDate   DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([active, priority])
+  @@index([startDate, endDate])
 }
 
 model Source {
-  id        String     @id @default(uuid())
-  name      String
-  url       String
-  type      SourceType
-  createdAt DateTime   @default(now())
-  drops     Drop[]
-  logs      FetchLog[]
+  id          String     @id @default(uuid())
+  name        String
+  url         String
+  type        SourceType
+  isActive    Boolean    @default(true)
+  lastChecked DateTime?
+  checkInterval Int      @default(24) // Hours between checks
+  config      Json?      // Additional configuration for the source
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  drops       Drop[]
+  logs        FetchLog[]
+
+  @@unique([url])
+  @@index([type, isActive])
 }
 
 enum SourceType {
   GITHUB
   TWITTER
   MANUAL
+  AIRDROP_AGGREGATOR
+  OFFICIAL_ANNOUNCEMENT
+  COMMUNITY_LEAK
+  BLOCKCHAIN_EXPLORER
 }
 
 model FetchLog {
@@ -88,8 +178,12 @@ model FetchLog {
   newDrops     Int      @default(0)
   updatedDrops Int      @default(0)
   errors       String?
+  metadata     Json?    // Additional data about the fetch
   source       Source?  @relation(fields: [sourceId], references: [id])
   sourceId     String?
+
+  @@index([startedAt])
+  @@index([sourceId])
 }
 
 model EligibilityCache {
@@ -99,29 +193,63 @@ model EligibilityCache {
   dropId    String
   eligible  Boolean
   checkedAt DateTime @default(now())
+  metadata  Json?    // Additional eligibility data
 
   @@unique([address, dropId])
   @@index([address])
+  @@index([checkedAt])
 }
 
 enum EligibilityStatus {
   ELIGIBLE
+  NOT_ELIGIBLE
   CLAIMED
   EXPIRED
+  PENDING_VERIFICATION
 }
 
 model Eligibility {
-  id          String            @id @default(uuid())
+  id            String            @id @default(uuid())
   walletAddress String
-  drop        Drop              @relation(fields: [dropId], references: [id])
-  dropId      String
-  valueUSD    Decimal           @default(0)
-  status      EligibilityStatus @default(ELIGIBLE)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  drop          Drop              @relation(fields: [dropId], references: [id])
+  dropId        String
+  valueUSD      Decimal           @default(0)
+  tokenAmount   Decimal?          // Amount of tokens eligible
+  status        EligibilityStatus @default(ELIGIBLE)
+  claimTxHash   String?           // Transaction hash if claimed
+  claimedAt     DateTime?
+  metadata      Json?             // Additional eligibility data
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   @@unique([walletAddress, dropId])
   @@index([walletAddress])
   @@index([status])
+  @@index([claimedAt])
+}
+
+model AirdropChecker {
+  id          String   @id @default(uuid())
+  name        String
+  url         String
+  isActive    Boolean  @default(true)
+  lastChecked DateTime?
+  successRate Decimal  @default(0) // Success rate percentage
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([url])
+  @@index([isActive, successRate])
+}
+
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  type      String   @default("string") // string, number, boolean, json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
 }
 

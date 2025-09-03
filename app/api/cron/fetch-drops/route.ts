@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { crawlGitHubRepositories } from '@/src/server/fetchers/githubCrawler'
+import { fetchAllAirdropData } from '@/src/server/fetchers/githubCrawler'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,11 +15,22 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const logs = await crawlGitHubRepositories()
+    console.log('Starting daily airdrop data fetch...')
+    const logs = await fetchAllAirdropData()
+    
+    const totalNewDrops = logs.reduce((sum, log) => sum + log.newDrops, 0)
+    const totalErrors = logs.filter(log => log.errors).length
+    
+    console.log(`Daily fetch completed: ${totalNewDrops} new drops, ${totalErrors} errors`)
     
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
+      summary: {
+        totalNewDrops,
+        totalErrors,
+        sourcesProcessed: logs.length
+      },
       logs,
     })
   } catch (error: any) {

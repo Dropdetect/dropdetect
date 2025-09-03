@@ -1,6 +1,9 @@
 import { PrismaClient, DropStatus, SourceType, EligibilityStatus } from '@prisma/client'
 import { Octokit } from '@octokit/rest'
 import { isValidClaimUrl } from './github'
+import { fetchFromAirdropAggregators } from './airdropAggregator'
+import { crawlTwitterForAirdrops } from './twitterCrawler'
+import { crawlCommunityLeaks } from './communityLeakCrawler'
 
 const prisma = new PrismaClient()
 
@@ -36,7 +39,7 @@ export async function crawlGitHubRepositories() {
       const repoUrl = `https://github.com/${owner}/${repo}`
       const sourceRecord = await prisma.source.upsert({
         where: { url: repoUrl },
-        update: {},
+        update: { lastChecked: new Date() },
         create: { name: `${owner}/${repo}`, url: repoUrl, type: SourceType.GITHUB },
       })
       
@@ -64,16 +67,20 @@ export async function crawlGitHubRepositories() {
           if (projectName && addresses.length > 0) {
             // Create or update drop
             const drop = await prisma.drop.upsert({
-              where: { claimUrl: `${repoUrl}/blob/main/${item.path}` },
+              where: { 
+                name_symbol: {
+                  name: projectName,
+                  symbol: projectName.substring(0, 4).toUpperCase()
+                }
+              },
               update: {
-                name: projectName,
                 updatedAt: new Date(),
               },
               create: {
                 name: projectName,
                 symbol: projectName.substring(0, 4).toUpperCase(),
                 logoUrl: '/placeholder-logo.png',
-                status: DropStatus.UNCLAIMED,
+                status: DropStatus.UPCOMING,
                 claimUrl: `${repoUrl}/blob/main/${item.path}`,
                 estValueUSD: 0,
                 sourceId: sourceRecord.id,
@@ -137,6 +144,127 @@ export async function crawlGitHubRepositories() {
   }
 
   return logs
+}
+
+// Main orchestrator function that runs all data sources
+export async function fetchAllAirdropData() {
+  console.log('Starting comprehensive airdrop data fetch...')
+  
+  const allLogs: { source: string; type: string; newDrops: number; errors?: string }[] = []
+  
+  try {
+    // 1. Fetch from GitHub repositories
+    console.log('Fetching from GitHub repositories...')
+    const githubLogs = await crawlGitHubRepositories()
+    allLogs.push(...githubLogs.map(log => ({ ...log, type: 'GitHub' })))
+    
+    // 2. Fetch from airdrop aggregators
+    console.log('Fetching from airdrop aggregators...')
+    const aggregatorLogs = await fetchFromAirdropAggregators()
+    allLogs.push(...aggregatorLogs.map(log => ({ ...log, type: 'Aggregator' })))
+    
+    // 3. Crawl Twitter for airdrop announcements
+    console.log('Crawling Twitter for airdrop announcements...')
+    const twitterLogs = await crawlTwitterForAirdrops()
+    allLogs.push(...twitterLogs.map(log => ({ ...log, type: 'Twitter' })))
+    
+    // 4. Crawl community leak sources
+    console.log('Crawling community leak sources...')
+    const leakLogs = await crawlCommunityLeaks()
+    allLogs.push(...leakLogs.map(log => ({ ...log, type: 'Community Leak' })))
+    
+    // 5. Update drop statuses based on dates
+    console.log('Updating drop statuses...')
+    await updateDropStatuses()
+    
+    // 6. Clean up old data
+    console.log('Cleaning up old data...')
+    await cleanupOldData()
+    
+    console.log('Airdrop data fetch completed successfully')
+    return allLogs
+    
+  } catch (error: any) {
+    console.error('Error in comprehensive airdrop data fetch:', error)
+    allLogs.push({
+      source: 'System',
+      type: 'Error',
+      newDrops: 0,
+      errors: error.message || String(error)
+    })
+    return allLogs
+  }
+}
+
+// Update drop statuses based on current date and claim dates
+async function updateDropStatuses() {
+  const now = new Date()
+  
+  // Update expired drops
+  await prisma.drop.updateMany({
+    where: {
+      claimEndDate: {
+        lt: now
+      },
+      status: {
+        in: [DropStatus.UPCOMING, DropStatus.ACTIVE]
+      }
+    },
+    data: {
+      status: DropStatus.EXPIRED,
+      updatedAt: now
+    }
+  })
+  
+  // Update active drops (claim period started)
+  await prisma.drop.updateMany({
+    where: {
+      claimStartDate: {
+        lte: now
+      },
+      claimEndDate: {
+        gt: now
+      },
+      status: DropStatus.UPCOMING
+    },
+    data: {
+      status: DropStatus.ACTIVE,
+      updatedAt: now
+    }
+  })
+}
+
+// Clean up old data to keep database size manageable
+async function cleanupOldData() {
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  
+  // Clean up old fetch logs
+  await prisma.fetchLog.deleteMany({
+    where: {
+      startedAt: {
+        lt: thirtyDaysAgo
+      }
+    }
+  })
+  
+  // Clean up old feed events
+  await prisma.feedEvent.deleteMany({
+    where: {
+      createdAt: {
+        lt: thirtyDaysAgo
+      }
+    }
+  })
+  
+  // Clean up old eligibility cache entries
+  await prisma.eligibilityCache.deleteMany({
+    where: {
+      checkedAt: {
+        lt: thirtyDaysAgo
+      }
+    }
+  })
 }
 
 function isEligibilityFile(filename: string): boolean {
