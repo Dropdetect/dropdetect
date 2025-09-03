@@ -1,0 +1,23 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="16" cy="16" r="15" fill="#0F172A" />
+  
+  <!-- Outer Ring -->
+  <circle cx="16" cy="16" r="14" stroke="#3B82F6" stroke-width="1" stroke-opacity="0.8" />
+  
+  <!-- Inner Elements -->
+  <g>
+    <!-- Droplet Shape -->
+    <path d="M16 6C16 6 11 13 11 18C11 20.7614 13.2386 23 16 23C18.7614 23 21 20.7614 21 18C21 13 16 6 16 6Z" fill="#3B82F6" />
+    
+    <!-- Scan Lines -->
+    <rect x="8" y="15" width="16" height="0.5" fill="#60A5FA" fill-opacity="0.6" />
+    <rect x="8" y="17" width="16" height="0.5" fill="#60A5FA" fill-opacity="0.6" />
+    
+    <!-- Detection Circle -->
+    <circle cx="16" cy="18" r="4" stroke="#BFDBFE" stroke-width="0.5" stroke-dasharray="1 0.5" />
+    
+    <!-- Pulse Effect -->
+    <circle cx="16" cy="18" r="2" fill="#93C5FD" fill-opacity="0.3" />
+  </g>
+</svg>

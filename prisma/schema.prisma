@@ -1,0 +1,127 @@
+// Datasource and generator
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Models
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      UserRole @default(ADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum UserRole {
+  ADMIN
+}
+
+model Drop {
+  id          String     @id @default(uuid())
+  name        String
+  symbol      String
+  logoUrl     String
+  status      DropStatus @default(UPCOMING)
+  claimUrl    String
+  estValueUSD Decimal    @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  source      Source?    @relation(fields: [sourceId], references: [id])
+  sourceId    String?
+  eligibilityCache EligibilityCache[]
+  eligibility Eligibility[]
+
+  @@unique([claimUrl])
+  @@index([status])
+}
+
+enum DropStatus {
+  UNCLAIMED
+  CLAIMED
+  EXPIRED
+  UPCOMING
+}
+
+model FeedEvent {
+  id        String   @id @default(uuid())
+  address   String
+  message   String
+  valueUSD  Decimal  @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Banner {
+  id        String   @id @default(uuid())
+  imageUrl  String
+  linkUrl   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Source {
+  id        String     @id @default(uuid())
+  name      String
+  url       String
+  type      SourceType
+  createdAt DateTime   @default(now())
+  drops     Drop[]
+  logs      FetchLog[]
+}
+
+enum SourceType {
+  GITHUB
+  TWITTER
+  MANUAL
+}
+
+model FetchLog {
+  id           String   @id @default(uuid())
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+  newDrops     Int      @default(0)
+  updatedDrops Int      @default(0)
+  errors       String?
+  source       Source?  @relation(fields: [sourceId], references: [id])
+  sourceId     String?
+}
+
+model EligibilityCache {
+  id        String   @id @default(uuid())
+  address   String
+  drop      Drop     @relation(fields: [dropId], references: [id])
+  dropId    String
+  eligible  Boolean
+  checkedAt DateTime @default(now())
+
+  @@unique([address, dropId])
+  @@index([address])
+}
+
+enum EligibilityStatus {
+  ELIGIBLE
+  CLAIMED
+  EXPIRED
+}
+
+model Eligibility {
+  id          String            @id @default(uuid())
+  walletAddress String
+  drop        Drop              @relation(fields: [dropId], references: [id])
+  dropId      String
+  valueUSD    Decimal           @default(0)
+  status      EligibilityStatus @default(ELIGIBLE)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([walletAddress, dropId])
+  @@index([walletAddress])
+  @@index([status])
+}
+
